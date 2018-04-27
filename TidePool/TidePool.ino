@@ -32,6 +32,11 @@
   Version 1.3 April 10 2018
 */
 
+#include <Wire.h>
+#include "rgb_lcd.h"
+
+rgb_lcd lcd;
+
 boolean start;
 
 // Pin constants won't change. 
@@ -84,8 +89,10 @@ const long blinkSlow = 1000;
 
 // Run initial setup of variables
 void setup() {
-  // Start serial connection so that we can print to the serial monitor for testing
-  Serial.begin( 9600 );
+  // Start serial connection so that we can print to the LCD screen for testing
+  Serial.begin(115200);
+  
+  lcd.begin(16, 2);     // set up the LCD's number of columns and rows
   
   // Set the various digital input pins
   pinMode( InHigh, INPUT );
@@ -102,13 +109,13 @@ void setup() {
 
 // Main program
 void loop() {
-  // Read the current time... everythign is testing time intervals.
-  // 
+  // Read the current time... everything is testing time intervals.
   unsigned long currentTime = millis();
 
-  // If you are at High or Low tide you need to wait till the tide interval is complete.  The time has to reach  
-  // the end of the TideInterval.  
+  // If you are at High or Low tide you need to wait until the tide interval is complete.  The time has to reach  
+  // the end of the TideInterval.
 
+  // initializes variables at the start of a rising or falling tide
   if ( (currentTime - startTime) >= TideInterval || start ) {
     start = false;          // start variable makes sure this loop is executed at the beginning when t=0
       
@@ -131,7 +138,22 @@ void loop() {
     
     PumpOn = true;            // Turn the pump on to either raise or lower the tide
     blinkLED = blinkFast;
-    
+
+    // update LCD Screen
+    lcd.clear();            // resets cursor to (0,0)
+    if (Rising) {
+      lcd.print("R Done Draining");
+    }
+    else {
+      lcd.print("R Done Filling");
+    }
+    lcd.setCursor(0,1);
+    if (sensorHigh) {
+      lcd.print("High Water!");
+    }
+    else if (sensorLow) {
+      lcd.print("Low Water!");
+    }
     Serial.print("Tide interval is over. The variable Rising is ");
     Serial.println( Rising );
     Serial.print("   FYI: High Water Sensor = ");
@@ -158,7 +180,17 @@ void loop() {
   if ( (currentTime - lastTimeHigh) > debounceDelay ) {
     if ( readingSensorHigh != sensorHigh ) {
         sensorHigh = readingSensorHigh;
-        // If Sensor reading switched than print out an update
+        // If Sensor reading switched than print out an update        
+        lcd.setCursor(0,1);
+        if (sensorHigh) {
+          lcd.print("High Water!     ");
+          lcd.setRGB(0, 255, 0);
+        }
+        else {
+          lcd.print("                 ");
+          lcd.setRGB(0, 0, 255);
+        }
+   
         Serial.print("High Water Sensor = ");
         Serial.println(sensorHigh);
     }
@@ -173,9 +205,20 @@ void loop() {
   if ( (currentTime - lastTimeLow) > debounceDelay ) {
     if ( readingSensorLow != sensorLow ) {
         sensorLow = readingSensorLow;
-        // If Sensor reading switched than print out an update
+        // If Sensor reading switched than print out an update 
+        lcd.setCursor(0,1);
+        if (sensorLow) {
+          lcd.print("Low Water!       ");
+          lcd.setRGB(0, 255, 0);
+        }
+        else {
+          lcd.print("                 ");
+          lcd.setRGB(0, 0, 255);
+        }
+        
         Serial.print("Low Water Sensor = ");
         Serial.println(sensorLow);
+        lcd.setRGB(0, 255, 0);
     }
   }
   lastSensorLow = readingSensorLow;  
@@ -226,6 +269,13 @@ void loop() {
     digitalWrite( LowLED, LOW);
   }
 
+  // if both the low sensor and high sensor are tripped, we have an error
+  if (sensorLow == HIGH and sensorHigh == HIGH) {
+    lcd.setCursor(0, 1);
+    lcd.print("SENSOR ERROR    ");
+    lcd.setRGB(255, 0, 0);
+  }
+
   // Blink the indicator LED if it is not high or low tide
   if ( !HighTide && !LowTide ) {
     if ( (currentTime - timeLED) >= blinkLED ) {
@@ -258,19 +308,31 @@ void loop() {
       PumpOn = false;
       blinkLED = blinkSlow;
       previousTime = currentTime;
+      
+      // print if is paused
+      lcd.setCursor(0,0);
+      lcd.print("Pause Filling R ");
+      
       Serial.println("Turning PumpLeft off - pause filling");
     } else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
       blinkLED = blinkFast;
       previousTime = currentTime;
+
+      // print if is filling
+      lcd.setCursor(0,0);
+      lcd.print("Continue Filling R");
+      
       Serial.println("Turning PumpLeft on - continue filling");
     }
+
+    // TODO: Shouldn't this be in timed
     if ( PumpOn ) {
       // Pump stays on for the pumpOnTime
-      digitalWrite( PumpLeft, HIGH );
+      digitalWrite( PumpLeft, HIGH);
     } else {
       // Pump stays off for the pumpOffTime
-      digitalWrite( PumpLeft, LOW );
+      digitalWrite( PumpLeft, LOW);
     } 
   }
   if ( !Rising && !LowTide ) {
@@ -278,13 +340,25 @@ void loop() {
       PumpOn = false;
       blinkLED = blinkSlow;
       previousTime = currentTime;
+
+      // print if puased draining
+      lcd.setCursor(0,0);
+      lcd.print("Pause Draining R");
+      
       Serial.println("Turning PumpRight off - pause draining");
     } else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
       blinkLED = blinkFast;
       previousTime = currentTime;
+      
+      // print if is draining
+      lcd.setCursor(0,0);
+      lcd.print("Continue Draining R");
+      
       Serial.println("Turning PumpRight on - continue draining");
     }
+
+    // TODO: shouldn't this be in timed conditional?
     if ( PumpOn ) {
       // Pump stays on for the pumpOnTime
       digitalWrite(PumpRight, HIGH);
