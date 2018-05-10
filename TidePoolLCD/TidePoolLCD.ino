@@ -83,7 +83,7 @@ int lastSensorRef = sensorRef;
 unsigned long lastTimeHigh = 0;
 unsigned long lastTimeLow = 0;
 unsigned long lastTimeRef = 0;
-unsigned long debounceDelay = 100;
+unsigned long debounceDelay = 2*60*1000;    // delay 2 minutes when debounce
 
 // Indicator light variables
 unsigned long timeLED = 0;
@@ -126,17 +126,6 @@ void loop() {
   
   // Read the current time... everything is testing time intervals.
   unsigned long currentTime = millis();
-
-  //Serial.print("TideInterval ");
-  //Serial.println(TideInterval);
-  //Serial.print("PumpOnTime ");
-  //Serial.println(pumpOnTime);
-  
-  //Serial.print("PumpOffTime ");
-  //Serial.println(pumpOffTime);
-  //Serial.print("(currentTime - startTime) ");
-  //Serial.println((currentTime - startTime));
-  //Serial.println((currentTime - startTime) >= TideInterval);
 
   // If you are at High or Low tide you need to wait until the tide interval is complete.  The time has to reach  
   // the end of the TideInterval.
