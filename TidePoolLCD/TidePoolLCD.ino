@@ -68,6 +68,7 @@ unsigned long previousTime = 0;                     // store the time since the 
 const unsigned long TideInterval = 6.5*60*60*1000;        // 6.5 hours is the half-period of a tide (in msec)
 const unsigned long pumpOnTime = 5.0*60*1000;               // Pump is ON for 5 minutes
 const unsigned long pumpOffTime = 5.0*60*1000;              // Pump is OFF for 5 minutes
+const unsigned long extremeTideTime = 1.0*60*1000;
 
 // Tide state variables
 boolean HighTide = false;          // Default lowering tide when you first turn on the system
@@ -132,6 +133,8 @@ void setup() {
   Serial.println(pumpOnTime);
   Serial.print("PumpOffTime ");
   Serial.println(pumpOffTime);
+  Serial.print("ExtremeTideTime ");
+  Serial.println(extremeTideTime);
 
   currentTideIndex = 0;   // ensure start at the first tide level;
 }
@@ -290,10 +293,14 @@ void loop() {
   if ( sensorHigh == HIGH ) {
     HighTide = true;
     digitalWrite( HighLED, HIGH);
-    // Turn the PumpLeft off since we want to stop filling the pool
-    digitalWrite( PumpLeft, writePumpOff);
-    PumpOn = false;
-    previousTime = currentTime;
+    // make sure pump has been on for at least a minute
+    if ((currentTime - previousTime) >= extremeTideTime) {
+      // Turn the PumpLeft off since we want to stop filling the pool
+      digitalWrite( PumpLeft, writePumpOff);
+      
+      PumpOn = false;
+      previousTime = currentTime;
+    }
     
   } else {
     HighTide = false;
@@ -303,10 +310,12 @@ void loop() {
   if (sensorLow == HIGH) {
     LowTide = true;
     digitalWrite( LowLED, HIGH);
-    // Turn the PumpRight off since we want to stop draining the pool
-    digitalWrite( PumpRight, writePumpOff);
-    PumpOn = false;
-    previousTime = currentTime;
+    if ((currentTime - previousTime) >= extremeTideTime) {
+      // Turn the PumpRight off since we want to stop draining the pool
+      digitalWrite( PumpRight, writePumpOff);
+      PumpOn = false;
+      previousTime = currentTime;
+    }
   } else {
     LowTide = false;
     digitalWrite( LowLED, LOW);
