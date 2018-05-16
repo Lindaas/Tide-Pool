@@ -57,8 +57,8 @@ const int HighLED = 9;
 const int LowLED  = 10;
 
 // NOTE: Don't have any on pin 13 as this pin goes high when reset
-const int PumpLeft = 11;    // This pump fills the pool
-const int PumpRight = 12;   // This pump empties the pool
+const int PumpFill = 11;    // This pump fills the pool
+const int PumpDrain = 12;   // This pump empties the pool
 
 // Generally, use "unsigned long" for variables that hold time
 // since the value will quickly become too large for an int to store
@@ -122,8 +122,8 @@ void setup() {
   // Set the various digital output pins
   pinMode( HighLED, OUTPUT );
   pinMode( LowLED, OUTPUT );
-  pinMode( PumpLeft, OUTPUT );      // When a pump is LOW pump on
-  pinMode( PumpRight, OUTPUT );
+  pinMode( PumpFill, OUTPUT );      // When a pump is LOW pump on
+  pinMode( PumpDrain, OUTPUT );
   start = true;
 
   dumpState("");              // print current state
@@ -144,8 +144,8 @@ void loop() {
   if ( (currentTime - startTime) >= TideInterval || start ) {
     // turn both pumps off initially
     // and every single time change tide, turn off both pumps, will be turn on/off later in code
-    digitalWrite( PumpLeft, writePumpOff);
-    digitalWrite( PumpRight, writePumpOff);
+    digitalWrite( PumpFill, writePumpOff);
+    digitalWrite( PumpDrain, writePumpOff);
 
     start = false;          // start variable makes sure this loop is executed at the beginning when t=0
 
@@ -263,9 +263,9 @@ void loop() {
     HighTide = true;
     digitalWrite( HighLED, HIGH);
     // make sure pump has been on for at least a minute
-    if ((currentTime - previousTime) >= extremeTideTime) {
-      // Turn the PumpLeft off since we want to stop filling the pool
-      digitalWrite( PumpLeft, writePumpOff);
+    if ((currentTime - previousTime) >= extremeTideTime && Rising) {
+      // Turn the PumpFill off since we want to stop filling the pool
+      digitalWrite( PumpFill, writePumpOff);
 
       PumpOn = false;
       previousTime = currentTime;
@@ -280,8 +280,8 @@ void loop() {
     LowTide = true;
     digitalWrite( LowLED, HIGH);
     if ((currentTime - previousTime) >= extremeTideTime) {
-      // Turn the PumpRight off since we want to stop draining the pool
-      digitalWrite( PumpRight, writePumpOff);
+      // Turn the PumpDrain off since we want to stop draining the pool
+      digitalWrite( PumpDrain, writePumpOff);
       PumpOn = false;
       previousTime = currentTime;
     }
@@ -318,8 +318,8 @@ void loop() {
       Need to wait until the High or Low tide time interval has been met. Then start a pump.
       We want to cycle the correct pump on and off with the cycle time.
 
-      PumpLeft fills the pool
-      PumpRight empties the pool
+      PumpFill fills the pool
+      PumpDrain empties the pool
   */
 
   if ( Rising && !HighTide ) {
@@ -340,10 +340,10 @@ void loop() {
 
     if ( PumpOn ) {
       // Pump stays on for the pumpOnTime
-      digitalWrite( PumpLeft, writePumpOn);
+      digitalWrite( PumpFill, writePumpOn);
     } else {
       // Pump stays off for the pumpOffTime
-      digitalWrite( PumpLeft, writePumpOff);
+      digitalWrite( PumpFill, writePumpOff);
     }
   }
 
@@ -366,10 +366,10 @@ void loop() {
 
     if ( PumpOn ) {
       // Pump stays on for the pumpOnTime
-      digitalWrite(PumpRight, writePumpOn);
+      digitalWrite(PumpDrain, writePumpOn);
     } else {
       // Pump stays off for the pumpOffTime
-      digitalWrite(PumpRight, writePumpOff);
+      digitalWrite(PumpDrain, writePumpOff);
     }
   }
 }
