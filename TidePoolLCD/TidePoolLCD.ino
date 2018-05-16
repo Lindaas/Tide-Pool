@@ -279,7 +279,7 @@ void loop() {
   if (sensorLow == HIGH) {
     LowTide = true;
     digitalWrite( LowLED, HIGH);
-    if ((currentTime - previousTime) >= extremeTideTime) {
+    if ((currentTime - previousTime) >= extremeTideTime && !Rising) {
       // Turn the PumpDrain off since we want to stop draining the pool
       digitalWrite( PumpDrain, writePumpOff);
       PumpOn = false;
