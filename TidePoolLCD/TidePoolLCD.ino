@@ -427,10 +427,7 @@ void loop() {
       previousTime = currentTime;
 
       // print if paused draining
-      lcd.setCursor(0,0);
-      lcd.print("Pause Draining T");
-      
-      Serial.println("Turning PumpDrain off - pause draining");
+      setStateMessage("Pause Draining Tide Pool");
     } else if ( actualTideLevel - currentTideLevel > SmallChange ) {
       PumpOn = true;
       blinkLED = blinkFast;
