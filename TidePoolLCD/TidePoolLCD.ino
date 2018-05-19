@@ -269,6 +269,8 @@ void loop() {
 
       PumpOn = false;
       previousTime = currentTime;
+
+      setStateMessage("Stop fill high Tide");
     }
 
   } else {
@@ -284,6 +286,8 @@ void loop() {
       digitalWrite( PumpDrain, writePumpOff);
       PumpOn = false;
       previousTime = currentTime;
+      
+      setStateMessage("Stop drain low Tide");
     }
   } else {
     LowTide = false;
@@ -451,9 +455,11 @@ void printToLCD(String msg) {
   */
   lcd.print(msg);
   // pad remaining with spaces as to overwrite old message
-  int len = msg.length();
-  for (int i = 0; i < (16 - len); i++)
-    lcd.print(' ');
+  for (int i = 0; i < 16; i++)
+    if (i < msg.length()) 
+      lcd.print(msg.charAt(i));
+    else
+      lcd.print(' ');
 }
 
 void dumpState(String msg) {
