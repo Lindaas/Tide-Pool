@@ -34,7 +34,8 @@
 
 #include <Wire.h>
 #include "rgb_lcd.h"
-#include <MemoryUsage.h>
+#include <SoftwareSerial.h>
+//#include <MemoryUsage.h>
 
 rgb_lcd lcd;
 
@@ -50,12 +51,16 @@ const int InLow  =  2;
 const int triggerPin = 6;
 const int echoPin = 7;
 
-// reference voltage
+// reference voltage pin
 const int InRef  = 8;
 
 // LEDs to show on or off
 const int HighLED = 9;
 const int LowLED  = 10;
+
+// pins to communicate with the Wi-Fi Breakout Board
+const int rxESPPin = 4;
+const int txESPPin = 5;
 
 // NOTE: Don't have any on pin 13 as this pin goes high when reset
 const int PumpFill = 11;    // This pump fills the pool
@@ -93,9 +98,11 @@ int lastSensorRef = sensorRef;
 unsigned long lastTimeHigh = 0;
 unsigned long lastTimeLow = 0;
 unsigned long lastTimeRef = 0;
+unsigned long lastTimePulseHigh = 0;
 unsigned long lastTimeLCDUpdated = 0;
 
 const unsigned long debounceDelay = 100;
+const unsigned long pulseDelay = 1000;       // delay a second before triggering the ultrasonic sensor
 const unsigned long lcdDelay = 500;           // delay a half of a second between LCD updates
 
 // Indicator light variables
@@ -104,6 +111,12 @@ int stateLED = LOW;             // ledState used to set the LED
 long blinkLED = 500;           // interval at which to blink (milliseconds)
 const long blinkFast = 150;
 const long blinkSlow = 1000;
+
+// ultrasonic sensor variables
+unsigned long lastTimeUpdated = 0;
+short delayUpdate = 3000;               // update only every 3000 milliseconds (3 seconds)
+
+SoftwareSerial WiFiESP(rxESPPin, txESPPin);       // add fake serial ports to Wi-Fi board
 
 // Tidal Level Data
 //int currentTideIndex = 0;           // current index in tideLevels
@@ -123,6 +136,7 @@ void setup() {
   
   // Start serial connection so that we can print to the LCD screen for testing
   Serial.begin(115200);
+  WiFiESP.begin(9600);
 
   lcd.begin(16, 2);     // set up the LCD's number of columns and rows
   lcd.setRGB(0, 255, 0); // make lcd green initially
@@ -131,17 +145,19 @@ void setup() {
   pinMode( InHigh, INPUT );
   pinMode( InLow, INPUT );
   pinMode( InRef, INPUT );
+  pinMode( echoPin, INPUT );
 
   // Set the various digital output pins
   pinMode( HighLED, OUTPUT );
   pinMode( LowLED, OUTPUT );
   pinMode( PumpFill, OUTPUT );      // When a pump is LOW pump on
   pinMode( PumpDrain, OUTPUT );
+  pinMode( triggerPin, OUTPUT );
   start = true;
 
-  // these variables will be used later to change whether teh tide pool if filling or emptying
+  // these variables will be used later to change whether the tide pool if filling or emptying
   LowTide = digitalRead(InLow);
-  HighTide = digitalRead(InRef);
+  HighTide = digitalRead(InHigh);
 
   dumpState(0, "");              // print current state
 
@@ -150,30 +166,30 @@ void setup() {
 
 void dumpState(long currentTime, String msg) {
   /* Prints state to serial monitor */
-  // Serial.print(F("Time "));
-  // Serial.println(currentTime);
+  Serial.print(F("Time "));
+  Serial.println(currentTime);
   // ensure these are correct
-  // Serial.print(F("TideInterval "));
-  // Serial.println(TideInterval);
-  // Serial.print(F("PumpOnTime "));
-  // Serial.println(pumpOnTime);
-  // Serial.print(F("PumpOffTime "));
-  // Serial.println(pumpOffTime);
+  Serial.print(F("TideInterval "));
+  Serial.println(TideInterval);
+  Serial.print(F("PumpOnTime "));
+  Serial.println(pumpOnTime);
+  Serial.print(F("PumpOffTime "));
+  Serial.println(pumpOffTime);
 
-  // Serial.println(msg);
-  // Serial.print(F("The variable PumpOn is "));
-  // Serial.println(PumpOn);
-  // Serial.print(F("The variable Rising is "));
-  // Serial.println( Rising );
-  // Serial.print(F("   FYI: High Water Sensor = "));
-  // Serial.println(sensorHigh);
-  // Serial.print("   FYI: Low Water Sensor = ");
-  // Serial.println(sensorLow);
-  // Serial.print(F("   FYI: Reference Sensor = "));
-  // Serial.println(sensorRef);
-  // Serial.println();
+  Serial.println(msg);
+  Serial.print(F("The variable PumpOn is "));
+  Serial.println(PumpOn);
+  Serial.print(F("The variable Rising is "));
+  Serial.println( Rising );
+  Serial.print(F("   FYI: High Water Sensor = "));
+  Serial.println(sensorHigh);
+  Serial.print("   FYI: Low Water Sensor = ");
+  Serial.println(sensorLow);
+  Serial.print(F("   FYI: Reference Sensor = "));
+  Serial.println(sensorRef);
+  Serial.println();
 
-  // Serial.println(F("Starting state of the memory:"));
+  /*Serial.println(F("Starting state of the memory:"));
   MEMORY_PRINT_START
   MEMORY_PRINT_HEAPSTART
   MEMORY_PRINT_HEAPEND
@@ -181,21 +197,26 @@ void dumpState(long currentTime, String msg) {
   MEMORY_PRINT_END
   MEMORY_PRINT_HEAPSIZE
   FREERAM_PRINT;
-  // Serial.println(F("Ending state of the memory"));
+  Serial.println(F("Ending state of the memory"));*/
 }
 
 // Main program
 void loop() {
   // Read the current time... everything is testing time intervals.
   unsigned long currentTime = millis();
-  // Serial.println(currentTime/1000);
-
+  Serial.println(currentTime/1000);
+  /*Serial.print(currentTime);
+  Serial.print(" ");
+  Serial.print(lastTimePulseHigh);
+  Serial.print(" ");
+  Serial.println(pulseDelay);*/
+  
   // If you are at High or Low tide you need to wait until the tide interval is complete.  The time has to reach
   // the end of the TideInterval.
 
   // initializes variables at the start of a rising or falling tide
   if ( (currentTime - startTime) >= TideInterval || start ) {
-    // Serial.println(F("In tide change"));
+    Serial.println(F("In tide change"));
     
     // turn both pumps off initially
     // and every single time change tide, turn off both pumps, will be turn on/off later in code
@@ -204,7 +225,7 @@ void loop() {
 
     start = false;          // start variable makes sure this loop is executed at the beginning when t=0
 
-    // Serial.println(F("In tide change, checking high tide"));
+    Serial.println(F("In tide change, checking high tide"));
     if ( HighTide ) {
       HighTide = false;
       Rising = false;
@@ -222,23 +243,23 @@ void loop() {
     PumpOn = false;            // Turn the pump off. In five minutes, the pump will be on
     blinkLED = blinkFast;
 
-    // Serial.println(F("In tide change, updating LCD screen"));
+    Serial.println(F("In tide change, updating LCD screen"));
     // update LCD Screen
     if (Rising) {
-      // Serial.println(F("in tide change, Updating State Message"));
+      Serial.println(F("in tide change, Updating State Message"));
       strncpy(StateString, "TidePool Drained", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
-      // Serial.println(F("In tide change, updating tidepool drained"));
+      Serial.print(currentTime);
+      Serial.println(StateString);
+      Serial.println(F("In tide change, updating tidepool drained"));
       dumpState(currentTime, "TidePool Drained");
     }
     else {
       strncpy(StateString, "TidePool Full", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
+      Serial.print(currentTime);
+      Serial.println(StateString);
       dumpState(currentTime, "Tidepool Full");
     }
-    // Serial.println(F("Leaving tide change"));
+    Serial.println(F("Leaving tide change"));
   }
 
   // Now we need to check our sensors.... but make sure to debounce the readings
@@ -249,7 +270,7 @@ void loop() {
 
   // Check to see if the switches changed state due to either noise or water level
   //
-  // Serial.println(F("Checking Sensors"));
+  Serial.println(F("Checking Sensors"));
   if ( readingSensorHigh != lastSensorHigh ) {
     // Set the time and then we will will wait to see if the state change is stable
     lastTimeHigh = currentTime;
@@ -281,8 +302,8 @@ void loop() {
     if ( readingSensorRef != sensorRef ) {
       sensorRef = readingSensorRef;
       // If Sensor reading switched than print out an update
-      // Serial.print(F("Reference Sensor = "));
-      // Serial.println(sensorRef);
+      Serial.print(F("Reference Sensor = "));
+      Serial.println(sensorRef);
     }
   }
   lastSensorRef = readingSensorRef;
@@ -298,20 +319,20 @@ void loop() {
   // Indicator light: solid LED if a sensor is set, blink the HighLED if you are Rising
   // and blink the LowLED if you are not Rising
   //
-  // Serial.println(F("Setting High and Low Tide"));
+  Serial.println(F("Setting High and Low Tide"));
   if ( sensorHigh == HIGH ) {
     HighTide = true;
     digitalWrite( HighLED, HIGH);
-    // Serial.println(F("Setting High and Low Tide, Made LED High"));
+    Serial.println(F("Setting High and Low Tide, Made LED High"));
     strncpy(SensorString, "HIGH WATER!", lenString);
-    // Serial.println(F("Setting High and Low Tide, Made LED High, Updated Sensor String"));
+    Serial.println(F("Setting High and Low Tide, Made LED High, Updated Sensor String"));
   } else {
     HighTide = false;
     digitalWrite( HighLED, LOW);
-    // Serial.println(F("Setting High and Low Tide, Made LED LOW"));
+    Serial.println(F("Setting High and Low Tide, Made LED LOW"));
   }
 
-  // Serial.println(F("Check sensor Low == HIGH"));
+  Serial.println(F("Check sensor Low == HIGH"));
   if (sensorLow == HIGH) {
     LowTide = true;
     digitalWrite( LowLED, HIGH);
@@ -323,19 +344,19 @@ void loop() {
   }
 
   if (sensorLow == LOW and sensorHigh == LOW) {
-    // Serial.println(F("Update sensor message to null"));
+    Serial.println(F("Update sensor message to null"));
     
     strncpy(SensorString, " ", lenString);
-    // Serial.println(F("Finish Update"));
+    Serial.println(F("Finish Update"));
   }
 
-  // Serial.println(F("Check if sensor Error"));
+  Serial.println(F("Check if sensor Error"));
   // if both the low sensor and high sensor are tripped, we have an error
   if (sensorLow == HIGH and sensorHigh == HIGH) {
     strncpy(SensorString, "SENSOR ERROR!", lenString);
   }
 
-  // Serial.println(F("Blink indicator light"));
+  Serial.println(F("Blink indicator light"));
   // Blink the indicator LED if it is not high or low tide
   if ( !HighTide && !LowTide ) {
     if ( (currentTime - timeLED) >= blinkLED ) {
@@ -363,7 +384,7 @@ void loop() {
       PumpDrain empties the pool
   */
 
-  // Serial.println(F("Checking Rising & !HighTide"));
+  Serial.println(F("Checking Rising & !HighTide"));
   if ( Rising ) {
     // if in high tide turn pump off
     // if not high tide, switch between turning the pump on and off
@@ -375,8 +396,8 @@ void loop() {
 
         
         strncpy(StateString, "Stop fill High Tide", lenString);   
-        // Serial.print(currentTime);
-        // Serial.println(StateString);
+        Serial.print(currentTime);
+        Serial.println(StateString);
       }
     } else if ( PumpOn && (currentTime - previousTime) >= pumpOnTime ) {
       PumpOn = false;
@@ -384,8 +405,8 @@ void loop() {
       previousTime = currentTime;
 
       strncpy(StateString, "Pause Filling T", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
+      Serial.print(currentTime);
+      Serial.println(StateString);
     } else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
       blinkLED = blinkFast;
@@ -393,8 +414,8 @@ void loop() {
 
       // print if is filling
       strncpy(StateString, "Filling Tidepool", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
+      Serial.print(currentTime);
+      Serial.println(StateString);
     }
 
     if ( PumpOn ) {
@@ -406,7 +427,7 @@ void loop() {
     }
   }
 
-  // Serial.println(F("Not Rising"));
+  Serial.println(F("Not Rising"));
   if ( !Rising ) {
     if ( LowTide ) {
       if ((currentTime - previousTime) >= pumpOnTime) {
@@ -414,8 +435,8 @@ void loop() {
         previousTime = currentTime;
 
         strncpy(StateString, "Stop drain low tide", lenString);
-        // Serial.print(currentTime);
-        // Serial.println(StateString);
+        Serial.print(currentTime);
+        Serial.println(StateString);
       }
     } else if ( PumpOn && (currentTime - previousTime) >= pumpOnTime ) {
       PumpOn = false;
@@ -425,8 +446,8 @@ void loop() {
       // print if paused draining
       
       strncpy(StateString, "Pause Draining Tidepool", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
+      Serial.print(currentTime);
+      Serial.println(StateString);
     } else if ( !PumpOn && (currentTime - previousTime) >= pumpOffTime ) {
       PumpOn = true;
       blinkLED = blinkFast;
@@ -434,11 +455,11 @@ void loop() {
 
       // print if is draining
       strncpy(StateString, "Draining Tidepool", lenString);
-      // Serial.print(currentTime);
-      // Serial.println(StateString);
+      Serial.print(currentTime);
+      Serial.println(StateString);
     }
 
-    // Serial.println(F("in Draining, checking if pumpon"));
+    Serial.println(F("in Draining, checking if pumpon"));
     if ( PumpOn ) {
       // Pump stays on for the pumpOnTime
       digitalWrite(PumpDrain, writePumpOn);
@@ -448,27 +469,28 @@ void loop() {
     }
   }
 
-  // Serial.println(F("Checking state string"));
+  Serial.println(F("Checking state string"));
 
   /* Update LCD Screen if the state or sensor strings are different */
+  
   // state goes on first row of LCD screen
-  // Serial.println(StateString);
-  // Serial.println(prevStateString);
+  Serial.println(StateString);
+  Serial.println(prevStateString);
   if (strcmp(StateString, prevStateString) != 0 && (currentTime - lastTimeLCDUpdated) > lcdDelay) {
     strncpy(prevStateString, StateString, lenString);  // update previous stateString for comparison later
     lastTimeLCDUpdated = currentTime;
 
-    // Serial.println(prevStateString);
-    // Serial.println(F("Setting cursor"));
+    Serial.println(prevStateString);
+    Serial.println(F("Setting cursor"));
     lcd.setCursor(0,0);
     // pad remaining with spaces as to overwrite old message
-    // Serial.println(F("Printing String"));
+    Serial.println(F("Printing String"));
     if (strlen(StateString) > 16) StateString[16] = '\0';           // shortens string to 16 characters
     lcd.print(StateString);
-    // Serial.println(F("padding string"));
+    Serial.println(F("padding string"));
     for(int i = strlen(StateString); i < 16; i++) { 
-      // Serial.print(" For i");
-      // Serial.print(i);
+      Serial.print(" For i");
+      Serial.print(i);
       lcd.print(' ');                       // add spaces to overwrite previous state
     }
   } // end if StateString different
@@ -477,20 +499,20 @@ void loop() {
     strncpy(prevSensorString, SensorString, lenString);  // update previous stateString for comparison later
     lastTimeLCDUpdated = currentTime;
     
-    // Serial.println(F("inside sensor update"));
+    Serial.println(F("inside sensor update"));
     lcd.setCursor(0,1);                   // sensor info goes on second row of LCD
     // pad remaining with spaces as to overwrite old message
-    // Serial.println(F("Printing String"));
+    Serial.println(F("Printing String"));
     if (strlen(SensorString) > 16)  SensorString[16] = '\0';           // shortens string to 16 characters
     lcd.print(SensorString);
-    // Serial.println(F("padding string"));
+    Serial.println(F("padding string"));
     for(int i = strlen(SensorString); i < 16; i++) { 
-      // Serial.print(" For i");
-      // Serial.print(i);
+      Serial.print(" For i");
+      Serial.print(i);
       lcd.print(' ');                       // add spaces to overwrite previous state
     }
     
-    // Serial.println(F("Updating colors"));
+    Serial.println(F("Updating colors"));
     // update color to show errors
     if (SensorString[0] == ' ') {
       lcd.setRGB(0, 255, 0);               // no message, so no sensor triggered therefore green
@@ -501,6 +523,38 @@ void loop() {
         lcd.setRGB(0, 0, 255);          // high or low sensor triggered, turn background blue
     }
   } // end sensor string update
+
+  // update online log with water level
+  if((currentTime - lastTimeUpdated) > delayUpdate) {
+    Serial.println(F("Updating online water level"));
+    float duration, distance;
+    
+    // send ultrasonic pulse
+    digitalWrite(triggerPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(triggerPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(triggerPin, LOW);
+    
+    // see how long pulse takes to return to echo pin
+    duration = pulseIn(echoPin, HIGH, 50000);
+    distance = (duration / 2) / 29.1;    // Change time to get pulse back to centimeters
+    Serial.print("duration->");
+    Serial.println(duration);
+    
+    // save count to the 'distance' feed on Adafruit IO
+    Serial.print("level sending -> ");
+    Serial.println(distance);
+    //ultrasonicSensorFeed->save(distance);
+
+    // sending message to Wi-Fi chip by printing
+    WiFiESP.print(distance);        // note new line character signifies end of message
+    WiFiESP.print("\n");            // signifies end of message
+
+    // update last time updated
+    lastTimeUpdated = currentTime;
+  }
+  
 }
 // End of void() loop
 
@@ -523,15 +577,4 @@ float tideShouldBe(float tideData) {
     return tideData;
   }
 } // end tideShouldBe
-
-float currentLevel() {
-  /* Returns the current tide Level is in meters*/
-  float duration, distance;
-  digitalWrite(triggerPin, LOW);
-  digitalWrite(triggerPin, HIGH);
-  digitalWrite(triggerPin, LOW);
-  duration = pulseIn(echoPin, HIGH);
-  distance = (duration / 5820);    // Change time to get pulse back to centimeters
-  return distance;
-}
 
