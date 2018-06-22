@@ -52,9 +52,9 @@ A good way of fixing most issues is to restart the Arduino and/or the Wi-Fi boar
  **Problem: The online log isn't updating.**
  **Cause:** this could have multiple causes. I need you to do a few things to help figure out what the cause could be.
 1. First, try flipping the high or low tide sensor. If the LCD screen doesn't change color when the sensor is flipped, the Arduino is halted. Restart the Arduino by pressing the reset button pictured below. If the green LED doesn't light up when the button is pressed, go to step 5. If the LCD screen updated when the sensor if flipped, proceed to 2.
-![Image of Grove Seeed Base Shield V2 Reset Button](Reset Arduino.png)
+![Image of Grove Seeed Base Shield V2 Reset Button](https://raw.githubusercontent.com/meyerpa/Tide-Pool/master/Reset%20Arduino.png)
 2. The Arduino is running fine. This means that it could be a problem either with the ultrasonic sensor detecting a distance of 0 or with the Wi-Fi chip not connecting to the Adafruit IO website properly. Try resetting the Wi-Fi chip by pressing the button indicated in the image below. If the red and blue LCDs doesn't light up when reset, go to step 6. This chip could have lost connectivity to the wireless network. Wait two minutes and check the feed. If the feed is still not updating, go to 3.
-![Image of Adafruit Huzzah ESP8266 Reset Button](Reset Wi-Fi.jpg)
+![Image of Adafruit Huzzah ESP8266 Reset Button](https://raw.githubusercontent.com/meyerpa/Tide-Pool/master/Reset%20Wi-Fi.jpg)
 3. Replace the ultrasonic sensor with a new one. The environment we are working in is corrosive to the sensor, and the sensor could be broken. If this doesn't
 fix the issue proceed to step 4.
 4. Make sure all of the connections are correct. The pins should be connected as follows:
