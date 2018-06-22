@@ -215,7 +215,7 @@ void loop() {
   // the end of the TideInterval.
 
   // initializes variables at the start of a rising or falling tide
-  if ( (currentTime - startTime) >= TideInterval || start ) {
+  if ( abs(currentTime - startTime) >= TideInterval || start ) {
     Serial.println(F("In tide change"));
     
     // turn both pumps off initially
