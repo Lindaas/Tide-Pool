@@ -73,7 +73,7 @@ unsigned long previousTime = 0;                     // store the time since the 
 
 const unsigned long TideInterval = 6.5 * 60 * 60 * 1000;    // 6.5 hours is the half-period of a tide (in msec)
 const unsigned long pumpOnTime = 5.0 * 60 * 1000;           // Pump is ON for 5 minutes
-const unsigned long pumpOffTime = 6.0 * 60 * 1000;          // Pump is OFF for 5 minutes
+const unsigned long pumpOffTime = 6.1 * 60 * 1000;          // Pump is OFF for 6.1 minutes
 
 // Tide state variables
 boolean HighTide = false;          // Default lowering tide when you first turn on the system
@@ -215,7 +215,7 @@ void loop() {
   // the end of the TideInterval.
 
   // initializes variables at the start of a rising or falling tide
-  if ( abs(currentTime - startTime) >= TideInterval || start ) {
+  if ( currentTime - startTime >= TideInterval || start || startTime > currentTime) {
     Serial.println(F("In tide change"));
     
     // turn both pumps off initially
